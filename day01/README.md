@@ -21,7 +21,7 @@ According to the puzzle:
 
 So, given the line `a1b2c3d4e5f` we know `first digit = '1'`, `last digit = '5'` and `calibration value = 15`. It is important to note that **the only number here** is the _calibration value_! _first digit_ and _last digit_ are digits meaning they are **string**!
 
-We are going to start by **finding** the first digit of a line. For us to [`find`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/find) something we usually need an **array** of things; but we have a line (which is a string). How do we go from a string into a list of things? We [`split`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/split) the string! In this particular case we split it around each character so `'a1b2c3d4e5f'` would be `['a','1','b','2','c','3','d','4','e','5','f']`
+We are going to start by **finding** the first digit of a line. For us to [`find`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/find) something we usually need an **array** of things; but we have a line (which is a string). How do we go from a string into a list of things? We [`split`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/split) the string! In this particular case we split it around each character so `'a1b2c3d4e5f'` would become `['a','1','b','2','c','3','d','4','e','5','f']`
 
 ```js
 const characters = line.split('')
@@ -29,7 +29,7 @@ const characters = line.split('')
 console.log('>> characters', characters) // ['a','1','b','2','c','3','d','4','e','5','f']
 ```
 
-Now we can perform [equality](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Equality) check on every character until we find one that is a number
+Now we can perform an [equality](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Equality) check on every character until we find one that is a number
 
 ```js
 const firstDigit = characters.find(character => {
@@ -57,7 +57,7 @@ const lastDigit = characters.findLast(character => {
 console.log('>> last digit', lastDigit) // '5'
 ```
 
-But now I hear you say "That is a lot of duplicated code! That is bad!". Yes and no. There is nothing inherently wrong with duplicated code; but that is part of a broader discussion. For now lets take your suggestion and abstract a `isNumeric` convenience function.
+But I hear you say "That is a lot of duplicated code! That is bad!". Yes and no. There is nothing inherently wrong with duplicated code; but that is part of a broader discussion. For now lets take the suggestion and create a `isNumeric` convenience function.
 
 ```js
 function isNumeric(character) {
@@ -125,5 +125,200 @@ Whit this we should have the solution for part one ready! So lets move into part
 The rules for finding our _first digit_ and _last digit_ have changed!
 > It looks like some of the digits are actually spelled out with letters: `one`, `two`, `three`, `four`, `five`, `six`, `seven`, `eight`, and `nine` also count as valid "digits".
 
-> [!WARNING]
-> This is not complete yet!
+This poses a bit of a challenge because we can no longer "split the line into characters"; we now need to look at one or more characters to figure out if there is a number there or not. So the issue now is "how do I find the digits in a line".
+
+Lets start by adding a `findDigits` function. This is a function that will give us the **all the digits as they appear in a line**. For now; lets assume the function is there and it does what we have just said and re-visit our `getCalibrationValue`:
+
+```js
+function getCalibrationValue(line) {
+  const digits = findDigits(line)
+  const firstDigit = digits.at(0)
+  const lastDigit = digits.at(-1)
+  const calibrationValue = Number.parseInt(`${firstDigit}${lastDigit}`)
+  return calibrationValue
+}
+```
+
+That looks nice! But we still have one problem there: the digits returned by `findDigits` are not only numbers but also "spelled out" numbers; meaning we could have a situation where `firstDigit='one'` and `lastDigit='5'`. When we attempt to parse `one5` as a number using `Number.parseInt` we will end receiving `NaN` which is not a valid number!
+
+Looks like we need to answer yet another question: how do we transform any ot the possible digit values into its number counter part? Let's define yet another function `parseDigit` just for doing that!
+
+```js
+function parseDigit(digit) {
+  switch (digit) {
+    case 'one':   return 1
+    case 'two':   return 2
+    case 'three': return 3
+    case 'four':  return 4
+    case 'five':  return 5
+    case 'six':   return 6
+    case 'seven': return 7
+    case 'eight': return 8
+    case 'nine':  return 9
+    default:      return Number.parseInt(value)
+  }
+}
+```
+
+We can now safely parse our digits into numbers! Lets update `getCalibrationValue`:
+
+```js
+function getCalibrationValue(line) {
+  const digits = findDigits(line)
+  const firstDigit = parseDigit(digits.at(0))
+  const lastDigit = parseDigit(digits.at(-1))
+  const calibrationValue = Number.parseInt(`${firstDigit}${lastDigit}`)
+  return calibrationValue
+}
+```
+
+We implemented it using a [`switch`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/switch) statement. We could have implemented it using a look-up table but I believe the switch here is easier to follow.
+
+There is no more beating around the bush: we need to tackle `findDigits` if we want to solve the puzzle.
+
+Lets start by answering this question "_why does splitting the string does not work anymore?_". The answer is mainly because we are now looking for things that have different lengths! before it was always a single character (length = 1); but now we have short digits (e.g.: `'one'`) and long ones (e.g: `'three'`). This difference in length means we are not going to solve the problem by splitting; so let's try to figure out a different course of action.
+
+We have a **known list of valid digits**:
+
+```js
+const VALID_DIGITS = [
+  '1',   '2',   '3',     '4',    '5',    '6',   '7',     '8',     '9',
+  'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine',
+]
+```
+
+We can start by finding them in the line using [`indexOf`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/indexOf) and storing only the ones that actually appear in the line:
+
+```js
+function findDigits(line) {
+  const VALID_DIGITS = [
+    '1',   '2',   '3',     '4',    '5',    '6',   '7',     '8',     '9',
+    'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine',
+  ]
+
+  const digits = []
+
+  for (const digit of VALID_DIGITS) {
+    if (line.indexOf(digit) >= 0) {
+      digits.push(digit)
+    }
+  }
+
+  return digits
+}
+```
+
+Thats a start! But we have a problem now. The order of `digits` will be determined by the order of `VALID_DIGITS` because that is the array we are iterating. To solve this we can still iterate `VALID_DIGITS` but we are going to store the position of each digit so we can later [`sort`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/sort) them by position.
+
+```js
+function findDigits(line) {
+  const VALID_DIGITS = [
+    '1',   '2',   '3',     '4',    '5',    '6',   '7',     '8',     '9',
+    'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine',
+  ]
+
+  const digits = []
+
+  for (const digit of VALID_DIGITS) {
+    const position = line.indexOf(digit)
+    if (position >= 0) {
+      digits.push({ digit, position })
+    }
+  }
+
+  digits = digits.sort((digitA, digitB) => {
+    return digitB.position - digitA.position
+  })
+
+  return digits
+}
+```
+
+Thats almost it! We still have one small caveat to go around. We are using `indexOf(digit)` which means we get the first occurrence of `digit`; but _what if a given digit appears **more than once**?_ Well, we will need to repeat the `indexOf` call until we exhaust it.
+
+```js
+function findDigits(line) {
+  const VALID_DIGITS = [
+    '1',   '2',   '3',     '4',    '5',    '6',   '7',     '8',     '9',
+    'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine',
+  ]
+  
+  const digits = []
+
+  for (const digit of VALID_DIGITS) {
+    let position = line.indexOf(digit)
+    while (position >= 0) {
+      digits.push({ digit, position })
+      position = line.indexOf(digit, position)
+    }
+  }
+
+  digits = digits.sort((digitA, digitB) => {
+    return digitB.position - digitA.position
+  })
+
+  return digits
+}
+```
+
+And here we go! Let's put it all together a do a small recap of the solution:
+
+```js
+const result = 0
+
+lines.forEach(line => {
+  const calibrationValue = getCalibrationValue(line)
+  result = result + calibrationValue
+})
+
+console.log('>> result', result)
+
+// ----
+
+function getCalibrationValue(line) {
+  const digits = findDigits(line)
+  const firstDigit = parseDigit(digits.at(0))
+  const lastDigit = parseDigit(digits.at(-1))
+  const calibrationValue = Number.parseInt(`${firstDigit}${lastDigit}`)
+  return calibrationValue
+}
+
+function findDigits(line) {
+  const VALID_DIGITS = [
+    '1',   '2',   '3',     '4',    '5',    '6',   '7',     '8',     '9',
+    'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine',
+  ]
+  
+  const digits = []
+
+  for (const digit of VALID_DIGITS) {
+    let position = line.indexOf(digit)
+    while (position >= 0) {
+      digits.push({ digit, position })
+      position = line.indexOf(digit, position)
+    }
+  }
+
+  digits = digits.sort((digitA, digitB) => {
+    return digitB.position - digitA.position
+  })
+
+  return digits
+}
+
+
+function parseDigit(digit) {
+  switch (digit) {
+    case 'one':   return 1
+    case 'two':   return 2
+    case 'three': return 3
+    case 'four':  return 4
+    case 'five':  return 5
+    case 'six':   return 6
+    case 'seven': return 7
+    case 'eight': return 8
+    case 'nine':  return 9
+    default:      return Number.parseInt(value)
+  }
+}
+```
